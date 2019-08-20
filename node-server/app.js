@@ -31,8 +31,6 @@ SOFTWARE.
 var fs = require('fs');
 var path = require('path');
 var util = require('util');
-var assert = require('assert-plus');
-var mongoose = require('mongoose/');
 var bunyan = require('bunyan');
 var restify = require('restify');
 var config = require('./config');
@@ -68,22 +66,8 @@ var log = bunyan.createLogger({
 var serverPort = process.env.PORT || 3000;
 var serverURI = config.mongoose_auth_local;
 
-// Connect to MongoDB
-global.db = mongoose.connect(serverURI);
-var Schema = mongoose.Schema;
-log.info('MongoDB Schema loaded');
 
-// Here we create a schema to store our tasks and users. Pretty simple schema for now.
-var TaskSchema = new Schema({
-    owner: String,
-    Text: String,
-    completed: Boolean,
-    date: Date
-});
-
-// Use the schema to register a model
-mongoose.model('Task', TaskSchema);
-var Task = mongoose.model('Task');
+class Task { };
 
 /**
  *
@@ -110,41 +94,16 @@ function createTask(req, res, next) {
         return;
     }
 
-    _task.owner = owner;
-    _task.Text = req.params.Text;
-    _task.date = new Date();
-
-    _task.save(function(err) {
-        if (err) {
-            req.log.warn(err, 'createTask: unable to save');
-            next(err);
-        } else {
-            res.send(201, _task);
-
-        }
-    });
-
+    res.send(201, _task);
     return next();
 }
 
 // Delete a task by name
 function removeTask(req, res, next) {
 
-    Task.remove({
-        task: req.params.Text,
-        owner: owner
-    }, function(err) {
-        if (err) {
-            req.log.warn(err,
-                'removeTask: unable to delete %s',
-                req.params.Text);
-            next(err);
-        } else {
-            log.info('Deleted task:', req.params.Text);
-            res.send(204);
-            next();
-        }
-    });
+
+    res.send(204);
+    next();
 }
 
 /// Simple returns the list of TODOs that were loaded.
@@ -155,32 +114,7 @@ function listTasks(req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Headers", "X-Requested-With");
 
-    log.info("listTasks was called for: ", owner);
-
-    Task.find({
-        owner: owner
-    }).limit(20).sort('date').exec(function(err, data) {
-
-        if (err)
-            return next(err);
-
-        if (data.length > 0) {
-            log.info(data);
-        }
-
-        if (!data.length) {
-            log.warn(err, "There is no tasks in the database. Add one!");
-        }
-
-        if (!owner) {
-            log.warn(err, "You did not pass an owner when listing tasks.");
-        } else {
-
-            res.json(data);
-
-        }
-    });
-
+    res.json([]);
     return next();
 }
 
@@ -195,6 +129,7 @@ function MissingTaskError() {
 
     this.name = 'MissingTaskError';
 }
+
 util.inherits(MissingTaskError, restify.RestError);
 
 /**
@@ -218,13 +153,6 @@ server.pre(restify.pre.userAgentConnection());
 // Set a per request bunyan logger (with requestid filled in)
 server.use(restify.requestLogger());
 
-// Allow 5 requests/second by IP, and burst to 10
-server.use(restify.throttle({
-    burst: 10,
-    rate: 5,
-    ip: true,
-}));
-
 // Use the common stuff you probably want
 server.use(restify.acceptParser(server.acceptable));
 server.use(restify.dateParser());
@@ -233,6 +161,7 @@ server.use(restify.gzipResponse());
 server.use(restify.bodyParser({
     mapParams: true
 })); // Allows for JSON mapping to REST
+
 server.use(restify.authorizationParser()); // Looks for authorization headers
 
 // Let's start using Passport.js
@@ -241,7 +170,7 @@ server.use(passport.initialize()); // Starts passport
 server.use(passport.session()); // Provides session support
 
 var bearerStrategy = new OIDCBearerStrategy(options,
-    function(token, done) {
+    function (token, done) {
         log.info(token, 'was the token retreived');
         if (!token.oid)
             done(new Error('oid is not found in token'));
@@ -291,7 +220,7 @@ server.get('/', function root(req, res, next) {
 });
 
 
-server.listen(serverPort, function() {
+server.listen(serverPort, function () {
 
     var consoleMessage = '\n Windows Azure Active Directory Tutorial';
     consoleMessage += '\n +++++++++++++++++++++++++++++++++++++++++++++++++++++';
@@ -301,6 +230,6 @@ server.listen(serverPort, function() {
     consoleMessage += '\n !!! why not try a $curl -isS %s | json to get some ideas? \n';
     consoleMessage += '+++++++++++++++++++++++++++++++++++++++++++++++++++++ \n\n';
 
-    //log.info(consoleMessage, server.name, server.url, server.url, server.url);
+    log.info(consoleMessage, server.name, server.url, server.url, server.url);
 
 });
